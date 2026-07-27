@@ -65,7 +65,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'plagiat_project.wsgi.application'
 
-if os.getenv('USE_SQLITE', 'True') == 'True':
+if os.getenv('USE_SQLITE', 'False') == 'True':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -143,7 +143,7 @@ CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_EAGER', 'True') == 'True'
+CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_EAGER', 'False') == 'True'
 CELERY_TASK_EAGER_PROPAGATES = True
 
 # File Upload
