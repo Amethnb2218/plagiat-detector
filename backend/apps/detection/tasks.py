@@ -1,8 +1,28 @@
-from celery import shared_task
+import logging
 from django.utils import timezone
 
+logger = logging.getLogger(__name__)
+
+try:
+    from celery import shared_task
+except ImportError:
+    def shared_task(*args, **kwargs):
+        def decorator(func):
+            func.delay = lambda *a, **kw: func(*a, **kw)
+            func.apply_async = lambda *a, **kw: func(*a.get('args', []), **kw)
+            return func
+        if args and callable(args[0]):
+            return decorator(args[0])
+        return decorator
+
 from .models import PlagiarismAnalysis, PlagiarismMatch
-from .detector import PlagiarismPipeline
+
+DETECTOR_AVAILABLE = False
+try:
+    from .detector import PlagiarismPipeline
+    DETECTOR_AVAILABLE = True
+except ImportError:
+    logger.warning("Detection pipeline not available (missing ML deps)")
 from apps.documents.models import Document, DocumentSegment
 
 

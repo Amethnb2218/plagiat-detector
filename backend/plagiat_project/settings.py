@@ -65,16 +65,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'plagiat_project.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'plagiat_db'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+if os.getenv('USE_SQLITE', 'True') == 'True':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'plagiat_db'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
+    }
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -135,6 +143,8 @@ CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_EAGER', 'True') == 'True'
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # File Upload
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB

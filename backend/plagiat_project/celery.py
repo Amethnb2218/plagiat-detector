@@ -1,8 +1,11 @@
 import os
-from celery import Celery
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'plagiat_project.settings')
 
-app = Celery('plagiat_project')
-app.config_from_object('django.conf:settings', namespace='CELERY')
-app.autodiscover_tasks()
+try:
+    from celery import Celery
+    app = Celery('plagiat_project')
+    app.config_from_object('django.conf:settings', namespace='CELERY')
+    app.autodiscover_tasks()
+except ImportError:
+    app = None

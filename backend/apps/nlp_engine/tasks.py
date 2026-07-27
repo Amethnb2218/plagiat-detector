@@ -1,16 +1,58 @@
-import numpy as np
-from celery import shared_task
+import re
+import logging
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+try:
+    from celery import shared_task
+except ImportError:
+    def shared_task(*args, **kwargs):
+        def decorator(func):
+            func.delay = lambda *a, **kw: func(*a, **kw)
+            func.apply_async = lambda *a, **kw: func(*a.get('args', []), **kw)
+            return func
+        if args and callable(args[0]):
+            return decorator(args[0])
+        return decorator
 
 from apps.documents.models import Document, DocumentSegment
 from .extractor import TextExtractor, TextCleaner
-from .segmenter import HierarchicalSegmenter
-from .embeddings import EmbeddingGenerator, FAISSIndex
+
+ML_AVAILABLE = False
+try:
+    import numpy as np
+    from .segmenter import HierarchicalSegmenter
+    from .embeddings import EmbeddingGenerator, FAISSIndex
+    ML_AVAILABLE = True
+except ImportError:
+    logger.warning("ML dependencies not installed. Running in light mode (text extraction only).")
+
+
+def simple_sentence_split(text):
+    """Segmentation basique quand SpaCy n'est pas disponible."""
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    result = []
+    pos = 0
+    for i, sent in enumerate(sentences):
+        sent = sent.strip()
+        if len(sent) >= 15:
+            start = text.find(sent, pos)
+            if start == -1:
+                start = pos
+            result.append({
+                'position': len(result),
+                'text': sent,
+                'char_start': start,
+                'char_end': start + len(sent),
+            })
+            pos = start + len(sent)
+    return result
 
 
 @shared_task(bind=True, max_retries=3, time_limit=600)
 def process_document(self, document_id: str):
-    """Pipeline complet de traitement d'un document: extraction → nettoyage → segmentation → embeddings."""
+    """Pipeline de traitement d'un document: extraction, nettoyage, segmentation, embeddings."""
     try:
         doc = Document.objects.get(id=document_id)
         doc.status = Document.Status.PROCESSING
@@ -27,8 +69,14 @@ def process_document(self, document_id: str):
         clean_text = TextCleaner.clean(doc.raw_text)
 
         # 3. Segmentation
-        segmenter = HierarchicalSegmenter(language=doc.language)
-        sentences = segmenter.get_flat_sentences(clean_text)
+        if ML_AVAILABLE:
+            try:
+                segmenter = HierarchicalSegmenter(language=doc.language)
+                sentences = segmenter.get_flat_sentences(clean_text)
+            except Exception:
+                sentences = simple_sentence_split(clean_text)
+        else:
+            sentences = simple_sentence_split(clean_text)
 
         # 4. Création des segments en base
         segments_to_create = []
@@ -41,27 +89,30 @@ def process_document(self, document_id: str):
                 clean_text=sent_data['text'],
                 char_start=sent_data['char_start'],
                 char_end=sent_data['char_end'],
-                embedding_model='LaBSE',
+                embedding_model='LaBSE' if ML_AVAILABLE else 'none',
             ))
 
         DocumentSegment.objects.filter(document=doc).delete()
         created_segments = DocumentSegment.objects.bulk_create(segments_to_create, batch_size=500)
 
-        # 5. Génération des embeddings
-        if created_segments:
-            texts = [s.text for s in created_segments]
-            generator = EmbeddingGenerator(model_type='labse')
-            embeddings = generator.encode(texts, batch_size=64)
+        # 5. Génération des embeddings (si ML disponible)
+        if ML_AVAILABLE and created_segments:
+            try:
+                texts = [s.text for s in created_segments]
+                generator = EmbeddingGenerator(model_type='labse')
+                embeddings = generator.encode(texts, batch_size=64)
 
-            for segment, embedding in zip(created_segments, embeddings):
-                segment.embedding = embedding.tobytes()
+                for segment, embedding in zip(created_segments, embeddings):
+                    segment.embedding = embedding.tobytes()
 
-            DocumentSegment.objects.bulk_update(created_segments, ['embedding'], batch_size=500)
+                DocumentSegment.objects.bulk_update(created_segments, ['embedding'], batch_size=500)
 
-            # 6. Ajout à l'index FAISS global
-            faiss_index = FAISSIndex(dimension=768)
-            index_name = f"doc_{document_id}"
-            faiss_index.create_index(embeddings, index_name)
+                # 6. Index FAISS du document
+                faiss_index = FAISSIndex(dimension=768)
+                index_name = f"doc_{document_id}"
+                faiss_index.create_index(embeddings, index_name)
+            except Exception as e:
+                logger.warning(f"Embedding generation failed: {e}. Document processed without embeddings.")
 
         doc.status = Document.Status.PROCESSED
         doc.processed_at = timezone.now()
@@ -79,7 +130,10 @@ def process_document(self, document_id: str):
 
 @shared_task(time_limit=1800)
 def rebuild_corpus_index():
-    """Reconstruit l'index FAISS global avec tous les segments de tous les documents traités."""
+    """Reconstruit l'index FAISS global."""
+    if not ML_AVAILABLE:
+        return {'status': 'skipped', 'reason': 'ML dependencies not installed'}
+
     from .embeddings import CorpusIndex
 
     segments = DocumentSegment.objects.filter(
