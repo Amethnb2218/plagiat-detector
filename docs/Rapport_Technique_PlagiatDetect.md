@@ -541,22 +541,46 @@ docker-compose exec backend python scripts/create_superuser.py
 # Admin Django : http://localhost:8000/admin/
 ```
 
-### 9.3 Lancement en développement
+### 9.3 Lancement en développement (mode SQLite simplifié)
+
+Le projet supporte un mode SQLite qui ne nécessite ni PostgreSQL ni Redis :
 
 ```bash
 # Backend
 cd backend
 python -m venv venv
-source venv/Scripts/activate  # Windows: venv\Scripts\activate
+venv\Scripts\activate                    # Windows
+# source venv/bin/activate               # Linux/Mac
 pip install -r requirements.txt
 python -m spacy download fr_core_news_lg
-cp .env.example .env
+
+# Configurer le mode SQLite
+set USE_SQLITE=True                      # Windows cmd
+# export USE_SQLITE=True                 # Linux/Mac/Git Bash
+
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py runserver 8000
+
+# Frontend (dans un autre terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Ce mode est idéal pour le développement et les démonstrations. Les modèles IA (LaBSE, FAISS, SpaCy) fonctionnent normalement. Pour le traitement asynchrone avec Celery, utiliser l'option complète avec PostgreSQL + Redis :
+
+```bash
+# Backend avec PostgreSQL
+cd backend
+venv\Scripts\activate
+pip install -r requirements.txt
+python -m spacy download fr_core_news_lg
+python manage.py migrate
 python manage.py runserver
 
-# Celery (dans un autre terminal)
-celery -A plagiat_project worker --loglevel=info
+# Celery (dans un autre terminal, nécessite Redis)
+celery -A plagiat_project worker --loglevel=info --pool=solo
 
 # Frontend (dans un autre terminal)
 cd frontend

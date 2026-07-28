@@ -37,6 +37,64 @@ C'est tout. L'application est accessible sur : **http://localhost**
 
 ---
 
+## Installation sans Docker (développement)
+
+Si Docker n'est pas disponible, le projet peut tourner directement avec Python et Node.js :
+
+### Prérequis
+
+- Python 3.11+ : [python.org](https://www.python.org/downloads/)
+- Node.js 20+ : [nodejs.org](https://nodejs.org/)
+- 8 Go de RAM minimum (pour les modèles IA)
+- ~5 Go d'espace disque (modèles ML)
+
+### Installation
+
+```bash
+# Backend
+cd backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Linux/Mac
+
+pip install -r requirements.txt
+python -m spacy download fr_core_news_lg
+
+# Frontend
+cd ../frontend
+npm install
+```
+
+### Lancement (mode SQLite, sans PostgreSQL/Redis)
+
+```bash
+# Terminal 1 - Backend Django
+cd backend
+venv\Scripts\activate
+set USE_SQLITE=True            # Windows cmd
+# export USE_SQLITE=True       # Linux/Mac/Git Bash
+python manage.py migrate
+python manage.py runserver 8000
+
+# Terminal 2 - Frontend React
+cd frontend
+npm run dev
+```
+
+L'application est accessible sur **http://localhost:3000**
+
+> **Note** : En mode SQLite sans Redis/Celery, l'analyse de plagiat fonctionne en mode synchrone (pas de file d'attente). Pour la production ou les gros documents, utiliser Docker ou installer PostgreSQL + Redis séparément.
+
+### Créer un compte administrateur (mode SQLite)
+
+```bash
+cd backend
+set USE_SQLITE=True
+python manage.py createsuperuser
+```
+
+---
+
 ## Accès à l'application
 
 | URL | Description |

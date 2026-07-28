@@ -654,7 +654,7 @@ docker-compose exec backend python scripts/create_superuser.py
 # → Se connecter avec admin / admin123
 ```
 
-### 12.2 Option B : Sans Docker (développement)
+### 12.2 Option B : Sans Docker (mode complet avec PostgreSQL + Redis)
 
 **Terminal 1 - PostgreSQL** (doit tourner en arrière-plan) :
 ```bash
@@ -695,7 +695,49 @@ npm run dev
 # → Interface disponible sur http://localhost:3000
 ```
 
-### 12.3 Test du flux complet
+### 12.3 Option C : Mode léger SQLite (pas besoin de PostgreSQL ni Redis)
+
+Cette option est la plus simple pour tester rapidement. Elle utilise SQLite au lieu de PostgreSQL et ne nécessite pas Redis.
+
+**Terminal 1 - Backend Django** :
+```bash
+cd C:\Users\HP\Projects\plagiat-detector\backend
+venv\Scripts\activate
+
+# Activer le mode SQLite
+set USE_SQLITE=True              # Windows cmd
+# $env:USE_SQLITE = "True"      # Windows PowerShell
+# export USE_SQLITE=True        # Linux/Mac/Git Bash
+
+# Première fois uniquement
+python manage.py migrate
+python manage.py createsuperuser
+
+# Lancer le serveur
+python manage.py runserver 8000
+# → API disponible sur http://localhost:8000
+```
+
+**Terminal 2 - Frontend React** :
+```bash
+cd C:\Users\HP\Projects\plagiat-detector\frontend
+npm install   # première fois uniquement
+npm run dev
+# → Interface disponible sur http://localhost:3000
+```
+
+**Limitations du mode SQLite** :
+- Pas de traitement asynchrone (Celery/Redis absents) : les analyses tournent en mode synchrone
+- SQLite est mono-accès en écriture : ne pas utiliser en production
+- Convient parfaitement pour le développement, les tests et les démonstrations
+
+**Avantages** :
+- Installation rapide : seulement Python + Node.js requis
+- Pas besoin d'installer PostgreSQL ni Redis
+- Base de données dans un simple fichier `db.sqlite3`
+- Toutes les fonctionnalités ML/IA sont disponibles (LaBSE, FAISS, SpaCy)
+
+### 12.4 Test du flux complet
 
 1. Ouvrir http://localhost:3000 (ou http://localhost si Docker)
 2. Se connecter avec les identifiants admin
