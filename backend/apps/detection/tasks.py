@@ -3,13 +3,40 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+def _check_broker():
+    """Vérifie si le broker Celery (Redis) est accessible."""
+    try:
+        from django.conf import settings
+        import socket
+        url = getattr(settings, 'CELERY_BROKER_URL', 'redis://localhost:6379/0')
+        host = url.split('://')[1].split(':')[0] if '://' in url else 'localhost'
+        port = int(url.split(':')[-1].split('/')[0]) if url.count(':') >= 2 else 6379
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        s.connect((host, port))
+        s.close()
+        return True
+    except Exception:
+        return False
+
+CELERY_AVAILABLE = False
 try:
-    from celery import shared_task
+    from celery import shared_task as _real_shared_task
+    if _check_broker():
+        CELERY_AVAILABLE = True
+        shared_task = _real_shared_task
+    else:
+        raise ImportError("Broker not reachable")
 except ImportError:
     def shared_task(*args, **kwargs):
         def decorator(func):
-            func.delay = lambda *a, **kw: func(*a, **kw)
-            func.apply_async = lambda *a, **kw: func(*a.get('args', []), **kw)
+            def sync_call(*a, **kw):
+                class FakeSelf:
+                    def retry(self, exc=None, countdown=None):
+                        raise exc
+                return func(FakeSelf(), *a, **kw)
+            func.delay = sync_call
+            func.apply_async = lambda *a, **kw: sync_call(*kw.get('args', []))
             return func
         if args and callable(args[0]):
             return decorator(args[0])
