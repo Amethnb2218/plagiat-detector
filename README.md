@@ -133,6 +133,59 @@ Ouvrir http://localhost et entrer les identifiants admin.
 
 ---
 
+## Comment ça marche ?
+
+PlagiatDetect utilise l'intelligence artificielle pour comprendre le **sens** des phrases, pas seulement les mots. Voici le principe simplifié :
+
+### Le processus en 4 étapes
+
+```
+  DOCUMENT UPLOADÉ           ANALYSE IA              COMPARAISON           RÉSULTAT
+  ┌──────────┐          ┌──────────────┐         ┌──────────────┐      ┌──────────┐
+  │  PDF ou  │  ──────▶ │ Extraction + │ ──────▶ │ Recherche de │ ───▶ │  Score   │
+  │   DOCX   │          │ Découpe en   │         │  similitudes │      │  global  │
+  │          │          │   phrases    │         │  dans le     │      │    +     │
+  └──────────┘          └──────────────┘         │   corpus     │      │ passages │
+                                                  └──────────────┘      └──────────┘
+```
+
+1. **Extraction** : Le système lit le PDF/DOCX et en extrait le texte propre
+2. **Segmentation** : Le texte est découpé en phrases grâce à SpaCy (qui comprend les abréviations françaises comme "M.", "et al.", etc.)
+3. **Vectorisation** : Chaque phrase est transformée en un vecteur de 768 nombres par le modèle LaBSE — ce vecteur représente le **sens** de la phrase, pas ses mots exacts
+4. **Comparaison** : Les vecteurs sont comparés avec ceux des autres documents du corpus pour trouver les passages similaires
+
+### Pourquoi c'est plus intelligent qu'une recherche de mots ?
+
+| Situation | Détection classique | PlagiatDetect |
+|-----------|-------------------|---------------|
+| Copie mot-à-mot | Oui | Oui |
+| Reformulation avec synonymes | Non | **Oui** (même sens = vecteurs proches) |
+| Traduction depuis l'anglais | Non | **Oui** (LaBSE comprend 109 langues) |
+| Paragraphes réorganisés | Non | **Oui** (analyse de la structure) |
+
+### Les 4 détecteurs
+
+| Détecteur | Ce qu'il cherche | Exemple |
+|-----------|-----------------|---------|
+| **Copie directe** | Texte quasi-identique (≥90%) | "Le climat change" → "Le climat change rapidement" |
+| **Paraphrase** | Même sens, mots différents (≥75%) | "Le climat change" → "Les conditions météorologiques se transforment" |
+| **Cross-lingue** | Traduction non citée (≥72%) | "Le climat change" → "Climate is changing" |
+| **Structurel** | Paragraphes déplacés (>30%) | Mêmes sections mais dans un ordre différent |
+
+### Le score final
+
+```
+Score = 40% × paraphrase + 25% × copie directe + 20% × cross-lingue + 15% × structurel
+```
+
+- **Vert (< 25%)** : Pas de plagiat significatif
+- **Orange (25-49%)** : Passages suspects, vérification conseillée
+- **Rouge (≥ 50%)** : Taux élevé, vérification manuelle recommandée
+
+> Pour une explication technique complète, voir [docs/Comment_Ca_Marche.md](docs/Comment_Ca_Marche.md)
+
+---
+
 ## Commandes utiles
 
 ```bash
